@@ -11,6 +11,8 @@ project(megasource)
 
 set(MEGA TRUE)
 
+option(LOVE_USE_SDL3 "Use SDL3 instead of SDL2" OFF)
+
 set (CMAKE_CXX_STANDARD 11)
 
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
@@ -119,27 +121,45 @@ if(MSVC)
 	if(VSCOMNTOOLS STREQUAL "")
 		message(WARNING "Environment variable VSCOMNTOOLS not defined and vswhere.exe could not be found. Is Visual Studio properly installed?")
 	else()
-		# Find vcvarsall.bat.
-		get_filename_component(VS_VCVARSALL_BAT ${VSCOMNTOOLS}/../../VC/Auxiliary/Build/vcvarsall.bat ABSOLUTE)
-
+		# Find VsDevCmd.bat
+		get_filename_component(VS_VCVARSALL_BAT ${VSCOMNTOOLS}/VsDevCmd.bat ABSOLUTE)
 		if(NOT(EXISTS ${VS_VCVARSALL_BAT}))
-			# older VS versions have it here
-			get_filename_component(VS_VCVARSALL_BAT ${VSCOMNTOOLS}/../../VC/vcvarsall.bat ABSOLUTE)
+			# Find vcvarsall.bat.
+			get_filename_component(VS_VCVARSALL_BAT ${VSCOMNTOOLS}/../../VC/Auxiliary/Build/vcvarsall.bat ABSOLUTE)
+
+			if(NOT(EXISTS ${VS_VCVARSALL_BAT}))
+				# older VS versions have it here
+				get_filename_component(VS_VCVARSALL_BAT ${VSCOMNTOOLS}/../../VC/vcvarsall.bat ABSOLUTE)
+			endif()
 		endif()
 
 		if(EXISTS ${VS_VCVARSALL_BAT})
-			message(STATUS "Found vcvarsall.bat")
 			set(MEGA_MSVC_VCVARSALL_BAT ${VS_VCVARSALL_BAT})
 
-			if(MEGA_X86)
-				set(MEGA_MSVC_VCVARSALL_BAT_ARG "x86")
-			elseif(MEGA_ARM64)
-				set(MEGA_MSVC_VCVARSALL_BAT_ARG "x86_arm64")
+			if(VS_VCVARSALL_BAT MATCHES "VsDevCmd")
+				message(STATUS "Found VsDevCmd.bat")
+				if(MEGA_X64)
+					set(MEGA_MSVC_VCVARSALL_BAT_ARG "-arch=amd64")
+				elseif(MEGA_ARM64)
+					set(MEGA_MSVC_VCVARSALL_BAT_ARG "-arch=arm64 -host_arch=amd64")
+				else()
+					set(MEGA_MSVC_VCVARSALL_BAT_ARG "-arch=x86")
+				endif()
+				math(EXPR VS_TOOLCHAIN_VERSION_MAJOR "${VSVERSION} / 10")
+				math(EXPR VS_TOOLCHAIN_VERSION_MINOR "${VSVERSION} % 10")
+				set(MEGA_MSVC_VCVARSALL_BAT_ARG "${MEGA_MSVC_VCVARSALL_BAT_ARG} -vcvars_ver=${VS_TOOLCHAIN_VERSION_MAJOR}.${VS_TOOLCHAIN_VERSION_MINOR}")
 			else()
-				set(MEGA_MSVC_VCVARSALL_BAT_ARG "x86_amd64")
+				message(STATUS "Found vcvarsall.bat")
+				if(MEGA_X86)
+					set(MEGA_MSVC_VCVARSALL_BAT_ARG "x86")
+				elseif(MEGA_ARM64)
+					set(MEGA_MSVC_VCVARSALL_BAT_ARG "x64_arm64")
+				else()
+					set(MEGA_MSVC_VCVARSALL_BAT_ARG "x86_amd64")
+				endif()
 			endif()
 		else()
-			message(WARNING "Could not find vsvarsall.bat")
+			message(WARNING "Could not find VsDevCmd.bat nor vcvarsall.bat")
 		endif()
 	endif()
 
@@ -198,13 +218,14 @@ endif()
 
 set(MEGA_ZLIB_VER "1.2.12")
 set(MEGA_LUA51_VER "5.1.5")
-set(MEGA_LUAJIT_VER "2.1.0-e826d0c")
+set(MEGA_LUAJIT_VER "2.1.1710088188")
 set(MEGA_LIBOGG_VER "1.3.2")
 set(MEGA_LIBVORBIS_VER "1.3.5")
 set(MEGA_LIBTHEORA_VER "1.1.1")
-set(MEGA_FREETYPE_VER "2.12.0")
+set(MEGA_FREETYPE_VER "2.13.2")
 set(MEGA_SDL2_VER "2.28.5")
-set(MEGA_OPENAL_VER "1.22.0")
+set(MEGA_SDL3_VER "3.1.1-preview")
+set(MEGA_OPENAL_VER "1.23.1-bc7cb17")
 set(MEGA_MODPLUG_VER "0.8.8.4")
 
 set(SKIP_INSTALL_ALL TRUE)
@@ -260,18 +281,29 @@ add_subdirectory("libs/harfbuzz" ${CMAKE_BINARY_DIR}/harfbuzz)
 set(MEGA_HARFBUZZ harfbuzz)
 
 if(NOT EMSCRIPTEN)
-	message(STATUS "-----------------------------------------------------")
-	message(STATUS "Configuring: SDL2 ${MEGA_SDL2_VER}")
-	message(STATUS "-----------------------------------------------------")
 	if(WIN32 AND MEGA_ARM64)
 		# In Windows, SDL always tries to open OpenGL32.dll, which is not available in Windows ARM64.
 		# This will cause error later on which makes love.window.setMode unhappy even when
 		# LOVE_GRAPHICS_USE_OPENGLES is set, so disable OpenGL backend.
 		set(SDL_OPENGL OFF CACHE BOOL "(SDL) Enable OpenGL Backend" FORCE)
 	endif()
-	add_subdirectory("libs/SDL2" ${CMAKE_BINARY_DIR}/SDL2)
-	set(MEGA_SDL2 SDL2)
-	set(MEGA_SDL2MAIN SDL2main)
+	if (LOVE_USE_SDL3)
+		message(STATUS "-----------------------------------------------------")
+		message(STATUS "Configuring: SDL3 ${MEGA_SDL3_VER}")
+		message(STATUS "-----------------------------------------------------")
+		add_subdirectory("libs/SDL3" ${CMAKE_BINARY_DIR}/SDL3)
+		set(MEGA_SDL3 SDL3-shared)
+		set(MEGA_SDL2 )
+		set(MEGA_SDL2MAIN )
+	else()
+		message(STATUS "-----------------------------------------------------")
+		message(STATUS "Configuring: SDL2 ${MEGA_SDL2_VER}")
+		message(STATUS "-----------------------------------------------------")
+		add_subdirectory("libs/SDL2" ${CMAKE_BINARY_DIR}/SDL2)
+		set(MEGA_SDL2 SDL2)
+		set(MEGA_SDL2MAIN SDL2main)
+		set(MEGA_SDL3 )
+	endif()
 
 	message(STATUS "-----------------------------------------------------")
 	message(STATUS "Configuring: openal-soft ${MEGA_OPENAL_VER}")
@@ -300,7 +332,7 @@ add_subdirectory("libs/libmodplug-${MEGA_MODPLUG_VER}" ${CMAKE_BINARY_DIR}/libmo
 set(MEGA_MODPLUG modplug-static)
 
 # LuaJIT
-if(MSVC AND NOT MEGA_ARM64)
+if(MSVC)
 	message(STATUS "-----------------------------------------------------")
 	message(STATUS "Configuring: LuaJIT ${MEGA_LUAJIT_VER}")
 	message(STATUS "-----------------------------------------------------")
@@ -309,7 +341,7 @@ if(MSVC AND NOT MEGA_ARM64)
 	# Copy LuaJIT source to binary dir. LuaJIT builds in-source,
 	# and we don't want to modify the original source tree, so
 	# we copy it.
-	file(COPY libs/${MEGA_LUAJIT_DIR} DESTINATION libs)
+	file(COPY libs/${MEGA_LUAJIT_DIR} DESTINATION ${CMAKE_BINARY_DIR}/libs)
 
 	set(MEGA_LUAJIT_SOURCE_DIR ${CMAKE_BINARY_DIR}/libs/${MEGA_LUAJIT_DIR})
 
@@ -318,6 +350,7 @@ if(MSVC AND NOT MEGA_ARM64)
 			call \"${MEGA_MSVC_VCVARSALL_BAT}\" ${MEGA_MSVC_VCVARSALL_BAT_ARG}
 		)
 		cd \"${MEGA_LUAJIT_SOURCE_DIR}/src\"
+		cl
 		msvcbuild.bat debug amalg
 	")
 
@@ -330,8 +363,14 @@ if(MSVC AND NOT MEGA_ARM64)
 		BUILD_COMMAND "${MEGA_LUAJIT_SOURCE_DIR}/megabuild.bat"
 		INSTALL_COMMAND cmake -E make_directory ${CMAKE_BINARY_DIR}/bin
 			COMMAND cmake -E copy ${MEGA_LUAJIT_SOURCE_DIR}/src/lua51.dll ${CMAKE_BINARY_DIR}/bin
-			COMMAND cmake -E copy ${MEGA_LUAJIT_SOURCE_DIR}/src/lua51.lib ${CMAKE_BINARY_DIR}/bin)
-
+			COMMAND cmake -E copy ${MEGA_LUAJIT_SOURCE_DIR}/src/lua51.lib ${CMAKE_BINARY_DIR}/bin
+		BUILD_BYPRODUCTS "${CMAKE_BINARY_DIR}/bin/lua51.lib" "${CMAKE_BINARY_DIR}/bin/lua51.dll"
+	)
+	set_target_properties(luajit PROPERTIES
+		INTERFACE_INCLUDE_DIRECTORIES "${MEGA_LUAJIT_SOURCE_DIR}/src"
+		IMPORTED_IMPLIB "${CMAKE_BINARY_DIR}/bin/lua51.lib"
+		IMPORTED_LOCATION "${CMAKE_BINARY_DIR}/bin/lua51.dll"
+	)
 	set(MEGA_LUAJIT_LIB ${CMAKE_BINARY_DIR}/bin/lua51.lib)
 	set(MEGA_LUAJIT_DLL ${CMAKE_BINARY_DIR}/bin/lua51.dll)
 	set(MEGA_LUAJIT_INCLUDE ${MEGA_LUAJIT_SOURCE_DIR}/src)
@@ -367,6 +406,7 @@ set(MEGA_3P
 	${MEGA_LIBVORBISFILE}
 	${MEGA_LIBTHEORA}
 	${MEGA_FREETYPE}
+	${MEGA_SDL3}
 	${MEGA_SDL2}
 	${MEGA_SDL2MAIN}
 	${MEGA_OPENAL}
@@ -382,13 +422,6 @@ if(EXISTS ${MEGA_LOVE}/CMakeLists.txt)
 	message(STATUS "-----------------------------------------------------")
 	message(STATUS "Configuring: love")
 	message(STATUS "-----------------------------------------------------")
-	if(MEGA_ARM64)
-		# LuaJIT currently doesn't support targetting Windows with ARM64
-		# architecture yet.
-		# TODO: Re-evaluate this once LuaJIT supports it.
-		# https://github.com/LuaJIT/LuaJIT/issues/593
-		set(LOVE_JIT OFF CACHE BOOL "Enable LOVE JIT" FORCE)
-	endif()
 	add_subdirectory(${MEGA_LOVE} ${CMAKE_BINARY_DIR}/love)
 
 	# Turn off third-party warnings when building with LOVE.
@@ -409,7 +442,7 @@ if(NOT EMSCRIPTEN)
 	add_executable(megatest src/test.cpp)
 	target_link_libraries(megatest ${MEGA_3P})
 
-	add_move_dll(megatest ${MEGA_SDL2})
+	add_move_dll(megatest ${MEGA_SDL2} ${MEGA_SDL3})
 	add_move_dll(megatest ${MEGA_OPENAL})
 	add_move_dll(megatest ${MEGA_LUA51})
 endif()
