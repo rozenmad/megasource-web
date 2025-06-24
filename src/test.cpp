@@ -10,7 +10,12 @@
 #include <vorbis/vorbisfile.h>
 #include <freetype/config/ftconfig.h>
 #include <freetype/freetype.h>
+#if __has_include(<SDL3/SDL.h>)
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_version.h>
+#else
 #include <SDL.h>
+#endif
 #include <AL/al.h>
 #include <AL/alext.h>
 #include <modplug.h>
@@ -85,21 +90,23 @@ int main(int argc, char **argv)
 	vfunc SDL = [](strs &c, strs &l)
 	{
 #if SDL_VERSION_ATLEAST(3, 0, 0)
-		SDL_Version compiled;
-		SDL_Version linked;
+		int compiled = SDL_VERSION;
+		int linked = SDL_GetVersion();
+
+		c << SDL_VERSIONNUM_MAJOR(compiled) << "." << SDL_VERSIONNUM_MINOR(compiled) << "." << SDL_VERSIONNUM_MICRO(compiled);
+		l << SDL_VERSIONNUM_MAJOR(linked) << "." << SDL_VERSIONNUM_MINOR(linked) << "." << SDL_VERSIONNUM_MICRO(linked);
+
+		return "SDL3";
 #else
 		SDL_version compiled;
 		SDL_version linked;
-#endif
 
 		SDL_VERSION(&compiled);
 		SDL_GetVersion(&linked);
 
 		c << (int)compiled.major << "." << (int)compiled.minor << "." << (int)compiled.patch;
 		l << (int)linked.major << "." << (int)linked.minor << "." << (int)linked.patch;
-#if SDL_VERSION_ATLEAST(3, 0, 0)
-		return "SDL3";
-#else
+
 		return "SDL2";
 #endif
 	};

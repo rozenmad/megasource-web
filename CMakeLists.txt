@@ -11,7 +11,7 @@ project(megasource)
 
 set(MEGA TRUE)
 
-option(LOVE_USE_SDL3 "Use SDL3 instead of SDL2" OFF)
+option(LOVE_USE_SDL3 "Use SDL3 instead of SDL2" ON)
 
 set (CMAKE_CXX_STANDARD 11)
 
@@ -31,7 +31,7 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 8)
 			set(_MEGATEMP_CHECKVAR MSVC_CXX_ARCHITECTURE_ID)
 		endif()
 		# FIXME: Code below also duplicates MEGA_X64 architecture assignment.
-		if(${_MEGATEMP_CHECKVAR} STREQUAL "ARM64")
+		if(${${_MEGATEMP_CHECKVAR}} MATCHES "^ARM64")
 			set(MEGA_ARM64 TRUE)
 			set(MEGA_ARCH ARM64)
 		else()
@@ -145,9 +145,12 @@ if(MSVC)
 				else()
 					set(MEGA_MSVC_VCVARSALL_BAT_ARG "-arch=x86")
 				endif()
-				math(EXPR VS_TOOLCHAIN_VERSION_MAJOR "${VSVERSION} / 10")
-				math(EXPR VS_TOOLCHAIN_VERSION_MINOR "${VSVERSION} % 10")
-				set(MEGA_MSVC_VCVARSALL_BAT_ARG "${MEGA_MSVC_VCVARSALL_BAT_ARG} -vcvars_ver=${VS_TOOLCHAIN_VERSION_MAJOR}.${VS_TOOLCHAIN_VERSION_MINOR}")
+				# If we're using MSVC, then the vcvars_ver can be extracted from the MSVC linker version.
+				# If we're somehow using Clang, then it won't work, but it's fine. VsDevCmd will use highest vcvars_ver available.
+				string(REGEX MATCH "^([0-9]+)\\.([0-9]+)" VSVERSION_MATCH ${CMAKE_C_COMPILER_LINKER_VERSION})
+				if(VSVERSION_MATCH)
+					set(MEGA_MSVC_VCVARSALL_BAT_ARG "${MEGA_MSVC_VCVARSALL_BAT_ARG} -vcvars_ver=${CMAKE_MATCH_1}.${CMAKE_MATCH_2}")
+				endif()
 			else()
 				message(STATUS "Found vcvarsall.bat")
 				if(MEGA_X86)
@@ -216,16 +219,16 @@ if(MSVC)
 endif()
 
 
-set(MEGA_ZLIB_VER "1.2.12")
+set(MEGA_ZLIB_VER "1.3.1")
 set(MEGA_LUA51_VER "5.1.5")
-set(MEGA_LUAJIT_VER "2.1.1710088188")
+set(MEGA_LUAJIT_VER "2.1.1734355927")
 set(MEGA_LIBOGG_VER "1.3.2")
 set(MEGA_LIBVORBIS_VER "1.3.5")
 set(MEGA_LIBTHEORA_VER "1.1.1")
 set(MEGA_FREETYPE_VER "2.13.2")
 set(MEGA_SDL2_VER "2.28.5")
-set(MEGA_SDL3_VER "3.1.1-preview")
-set(MEGA_OPENAL_VER "1.23.1-bc7cb17")
+set(MEGA_SDL3_VER "3.2.10")
+set(MEGA_OPENAL_VER "1.24.3")
 set(MEGA_MODPLUG_VER "0.8.8.4")
 
 set(SKIP_INSTALL_ALL TRUE)
@@ -239,6 +242,7 @@ set(OGG_LIBRARY ogg-static)
 message(STATUS "-----------------------------------------------------")
 message(STATUS "Configuring: zlib ${MEGA_ZLIB_VER}")
 message(STATUS "-----------------------------------------------------")
+set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "Enable Zlib Examples" FORCE)
 add_subdirectory("libs/zlib-${MEGA_ZLIB_VER}" ${CMAKE_BINARY_DIR}/zlib)
 set(MEGA_ZLIB zlibstatic)
 
@@ -351,7 +355,7 @@ if(MSVC)
 		)
 		cd \"${MEGA_LUAJIT_SOURCE_DIR}/src\"
 		cl
-		msvcbuild.bat debug amalg
+		msvcbuild.bat amalg
 	")
 
 	file(WRITE ${MEGA_LUAJIT_SOURCE_DIR}/megabuild.bat ${MEGA_LUAJIT_BUILD_BAT})

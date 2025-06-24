@@ -71,6 +71,11 @@ extern "C" {
 #define DETACH_KERNEL_DRIVER
 #endif
 
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable:5287) /* operands are different enum types */
+#endif
+
 /* Uncomment to enable the retrieval of Usage and Usage Page in
 hid_enumerate(). Warning, on platforms different from FreeBSD
 this is very invasive as it requires the detach
@@ -250,7 +255,7 @@ static int get_usage(uint8_t *report_descriptor, size_t size,
 				/* Can't ever happen since size_code is & 0x3 */
 				data_len = 0;
 				break;
-			};
+			}
 			key_size = 1;
 		}
 
@@ -454,7 +459,7 @@ static struct usb_string_cache_entry *usb_string_cache = NULL;
 static size_t usb_string_cache_size = 0;
 static size_t usb_string_cache_insert_pos = 0;
 
-static int usb_string_cache_grow()
+static int usb_string_cache_grow(void)
 {
 	struct usb_string_cache_entry *new_cache;
 	size_t allocSize;
@@ -472,7 +477,7 @@ static int usb_string_cache_grow()
 	return 0;
 }
 
-static void usb_string_cache_destroy()
+static void usb_string_cache_destroy(void)
 {
 	size_t i;
 	for (i = 0; i < usb_string_cache_insert_pos; i++) {
@@ -486,7 +491,7 @@ static void usb_string_cache_destroy()
 	usb_string_cache_insert_pos = 0;
 }
 
-static struct usb_string_cache_entry *usb_string_cache_insert()
+static struct usb_string_cache_entry *usb_string_cache_insert(void)
 {
 	struct usb_string_cache_entry *new_entry = NULL;
 	if (usb_string_cache_insert_pos >= usb_string_cache_size) {
@@ -872,15 +877,20 @@ static int is_xboxone(unsigned short vendor_id, const struct libusb_interface_de
 		0x044f, /* Thrustmaster */
 		0x045e, /* Microsoft */
 		0x0738, /* Mad Catz */
+		0x0b05, /* ASUS */
 		0x0e6f, /* PDP */
 		0x0f0d, /* Hori */
 		0x10f5, /* Turtle Beach */
 		0x1532, /* Razer Wildcat */
 		0x20d6, /* PowerA */
 		0x24c6, /* PowerA */
+		0x294b, /* Snakebyte */
 		0x2dc8, /* 8BitDo */
 		0x2e24, /* Hyperkin */
+		0x2e95, /* SCUF */
+		0x3285, /* Nacon */
 		0x3537, /* GameSir */
+		0x366c, /* ByoWave */
 	};
 
 	if (intf_desc->bInterfaceNumber == 0 &&
@@ -1170,7 +1180,7 @@ static void *read_thread(void *param)
 		dev->device_handle,
 		dev->input_endpoint,
 		buf,
-		length,
+		(int) length,
 		read_callback,
 		dev,
 		5000/*timeout*/);
@@ -1237,6 +1247,7 @@ static void init_xbox360(libusb_device_handle *device_handle, unsigned short idV
 	(void)conf_desc;
 
 	if ((idVendor == 0x05ac && idProduct == 0x055b) /* Gamesir-G3w */ ||
+	    (idVendor == 0x20d6 && idProduct == 0x4010) /* PowerA Battle Dragon Advanced Wireless Controller */ ||
 	    idVendor == 0x0f0d /* Hori Xbox controllers */) {
 		unsigned char data[20];
 
@@ -1597,7 +1608,7 @@ int HID_API_EXPORT hid_write(hid_device *dev, const unsigned char *data, size_t 
 		if (skipped_report_id)
 			length++;
 
-		return length;
+		return (int) length;
 	}
 	else {
 		/* Use the interrupt out endpoint */
@@ -1605,7 +1616,7 @@ int HID_API_EXPORT hid_write(hid_device *dev, const unsigned char *data, size_t 
 		res = libusb_interrupt_transfer(dev->device_handle,
 			dev->output_endpoint,
 			(unsigned char*)data,
-			length,
+			(int) length,
 			&actual_length, 1000);
 
 		if (res < 0)
@@ -1631,7 +1642,7 @@ static int return_data(hid_device *dev, unsigned char *data, size_t length)
 	dev->input_reports = rpt->next;
 	free(rpt->data);
 	free(rpt);
-	return len;
+	return (int) len;
 }
 
 static void cleanup_mutex(void *param)
@@ -1764,7 +1775,7 @@ int HID_API_EXPORT hid_send_feature_report(hid_device *dev, const unsigned char 
 	if (skipped_report_id)
 		length++;
 
-	return length;
+	return (int) length;
 }
 
 int HID_API_EXPORT hid_get_feature_report(hid_device *dev, unsigned char *data, size_t length)
@@ -2137,6 +2148,10 @@ uint16_t get_usb_code_for_current_locale(void)
 	/* Found nothing. */
 	return 0x0;
 }
+
+#if defined(_MSC_VER)
+#pragma warning (pop)
+#endif
 
 #ifdef __cplusplus
 }
